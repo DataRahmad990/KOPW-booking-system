@@ -149,14 +149,15 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-2">
               <p className="text-xs" style={{ color: 'var(--text)' }}>Demo Account</p>
-              <p
-                className="text-xs font-semibold mt-1 px-3 py-2 rounded-lg"
+              <div
+                className="text-xs font-semibold px-3 py-2 rounded-lg"
                 style={{ background: 'var(--secondary)', color: 'var(--heading)' }}
               >
-                adminKOPW@kantorojk.go.id / admin
-              </p>
+                <div>User: kopw@kantorojk.go.id / kopw123</div>
+                <div>Admin: admin@kantorojk.go.id / kantorojkkopw</div>
+              </div>
             </div>
           </div>
         </div>
