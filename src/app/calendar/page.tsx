@@ -7,6 +7,7 @@ import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore
 import { db } from '@/lib/firebase';
 import { Division, RoomResource, Equipment, Booking } from '@/lib/types';
 import { formatDate, generateTimeSlots, timeToMinutes } from '@/lib/timeUtils';
+import { getStaffByJabatan } from '@/lib/staffData';
 import DashboardLayout from '@/components/DashboardLayout';
 
 interface BookingWithDetails extends Booking {
@@ -607,13 +608,21 @@ export default function WeeklyCalendarPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="form-label">Nama Peminjam</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.borrowerName}
                     onChange={(e) => setFormData({ ...formData, borrowerName: e.target.value })}
-                    className="form-input"
+                    className="form-select"
                     required
-                  />
+                  >
+                    <option value="">Pilih Nama</option>
+                    {Object.entries(getStaffByJabatan()).map(([jabatan, members]) => (
+                      <optgroup key={jabatan} label={jabatan}>
+                        {members.map((s) => (
+                          <option key={s.no} value={s.nama}>{s.nama}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="form-label">Sub Bagian</label>

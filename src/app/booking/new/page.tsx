@@ -7,6 +7,7 @@ import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Division, RoomResource, Equipment, Booking } from '@/lib/types';
 import { timeToMinutes } from '@/lib/timeUtils';
+import { getStaffByJabatan } from '@/lib/staffData';
 import DashboardLayout from '@/components/DashboardLayout';
 
 export default function NewBookingPage() {
@@ -193,13 +194,21 @@ export default function NewBookingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="form-label">Nama Peminjam</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.borrowerName}
                     onChange={(e) => setFormData({ ...formData, borrowerName: e.target.value })}
-                    className="form-input"
+                    className="form-select"
                     required
-                  />
+                  >
+                    <option value="">Pilih Nama Peminjam</option>
+                    {Object.entries(getStaffByJabatan()).map(([jabatan, members]) => (
+                      <optgroup key={jabatan} label={jabatan}>
+                        {members.map((s) => (
+                          <option key={s.no} value={s.nama}>{s.nama}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="form-label">Sub Bagian</label>
