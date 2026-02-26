@@ -8,6 +8,7 @@ import { db } from '@/lib/firebase';
 import { Division, RoomResource, Equipment, Booking } from '@/lib/types';
 import { formatDate, generateTimeSlots, timeToMinutes } from '@/lib/timeUtils';
 import { getStaffByJabatan } from '@/lib/staffData';
+import { generateApproveLink } from '@/lib/approveToken';
 import DashboardLayout from '@/components/DashboardLayout';
 
 interface BookingWithDetails extends Booking {
@@ -309,9 +310,12 @@ export default function WeeklyCalendarPage() {
   if (!user) return null;
 
   if (success && lastBookingData) {
+    // Generate approve link
+    const approveLink = generateApproveLink(bookingId);
+
     // Format WhatsApp message
     const whatsappNumber = '6282242595858'; // Admin WA number
-    const message = `Halo Admin, saya ingin konfirmasi booking:
+    const message = `Halo Admin, ada booking baru yang perlu di-approve:
 
 *Booking ID:* ${bookingId}
 *Nama:* ${lastBookingData.borrowerName}
@@ -324,7 +328,10 @@ export default function WeeklyCalendarPage() {
 ${lastBookingData.equipment.length > 0 ? `*Perlengkapan:* ${lastBookingData.equipment.join(', ')}` : ''}
 ${lastBookingData.notes ? `*Catatan:* ${lastBookingData.notes}` : ''}
 
-Mohon di-approve ya, terima kasih!`;
+👉 *Quick Approve:*
+${approveLink}
+
+Atau login ke dashboard untuk review.`;
 
     const whatsappLink = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
 
