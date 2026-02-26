@@ -44,7 +44,21 @@ export default function AllBookingsPage() {
 
     setDeleting(bookingId);
     try {
+      // Get booking data before deleting
+      const bookingToCancel = bookings.find(b => b.id === bookingId);
+
       await deleteDoc(doc(db, 'bookings', bookingId));
+
+      // Redirect to cancel success page with booking details
+      if (bookingToCancel) {
+        const params = new URLSearchParams({
+          id: bookingId,
+          name: bookingToCancel.borrowerName,
+          room: bookingToCancel.roomResource,
+          date: bookingToCancel.bookingDate,
+        });
+        router.push(`/cancel-success?${params.toString()}`);
+      }
     } catch (error: any) {
       console.error('Error canceling booking:', error);
       alert(`Gagal membatalkan booking: ${error.message}`);
