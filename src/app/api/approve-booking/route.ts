@@ -7,11 +7,17 @@ import crypto from 'crypto';
 const SECRET_KEY = process.env.APPROVE_TOKEN_SECRET || 'kopw-booking-secret-key-2026';
 
 export function generateApproveToken(bookingId: string): string {
-  const hash = crypto
-    .createHmac('sha256', SECRET_KEY)
-    .update(bookingId)
-    .digest('hex');
-  return hash.substring(0, 32); // 32 char token
+  // Sync with client-side algorithm di src/lib/approveToken.ts
+  let hash = 0;
+  const str = bookingId + SECRET_KEY;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+
+  return Math.abs(hash).toString(16).padStart(32, '0').substring(0, 32);
 }
 
 export function verifyApproveToken(bookingId: string, token: string): boolean {
