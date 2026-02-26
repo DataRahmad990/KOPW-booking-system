@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Division, RoomResource, Equipment, Booking } from '@/lib/types';
+import { Division, RoomResource, Equipment, Booking, RoomLayout, EQUIPMENT_INVENTORY } from '@/lib/types';
 import { formatDate, generateTimeSlots, timeToMinutes } from '@/lib/timeUtils';
 import { getStaffByJabatan } from '@/lib/staffData';
 import { generateApproveLink } from '@/lib/approveToken';
+import { getAvailableEquipmentForRoom, getBuiltInEquipment, getAvailableEquipment } from '@/lib/equipmentUtils';
 import DashboardLayout from '@/components/DashboardLayout';
 
 interface BookingWithDetails extends Booking {
@@ -41,9 +42,13 @@ export default function WeeklyCalendarPage() {
     division: '' as Division,
     activityType: '',
     participantCount: 1,
+    roomLayout: 'Default' as RoomLayout,
     equipment: [] as Equipment[],
     notes: '',
   });
+
+  // All bookings for equipment availability checking
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
 
   const rooms: RoomResource[] = [
     'R. Integritas',
@@ -66,16 +71,11 @@ export default function WeeklyCalendarPage() {
     'LMST',
   ];
 
-  const equipmentOptions: Equipment[] = [
-    'Alat ZOOM Logitech',
-    'Monitor CISCO',
-    'Proyektor',
-    'Sound System',
-    'Printer Portable',
-    'LCD Video Wall Ruang Inpresiv',
-    'Hanya Ruangan Tanpa Alat Tambahan',
-    'Mic Confrence Portable',
-  ];
+  // Dynamic equipment based on selected room
+  const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
+
+  // Room layouts
+  const roomLayouts: RoomLayout[] = ['U-Shape', 'Classroom', 'Lesehan', 'Room Table'];
 
   const colors = [
     'linear-gradient(135deg, #3b82f6, #2563eb)',
@@ -118,6 +118,44 @@ export default function WeeklyCalendarPage() {
     }
     setCurrentWeek(week);
   }, []);
+
+  // Fetch all bookings for equipment availability
+  useEffect(() => {
+    const bookingsRef = collection(db, 'bookings');
+    const q = query(bookingsRef, where('status', 'in', ['pending', 'approved']));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const bookingsData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Booking[];
+      setAllBookings(bookingsData);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Update available equipment when room changes
+  useEffect(() => {
+    if (selectedRoom) {
+      const availableEq = getAvailableEquipmentForRoom(selectedRoom);
+      setAvailableEquipment(availableEq);
+
+      // Auto-assign built-in equipment
+      const builtIn = getBuiltInEquipment(selectedRoom);
+      if (builtIn.length > 0) {
+        setFormData((prev) => ({
+          ...prev,
+          equipment: [...new Set([...builtIn])],
+        }));
+      } else {
+        setFormData((prev) => ({
+          ...prev,
+          equipment: [],
+        }));
+      }
+    }
+  }, [selectedRoom]);
 
   useEffect(() => {
     if (!user) {
@@ -262,6 +300,7 @@ export default function WeeklyCalendarPage() {
         activityType: formData.activityType,
         participantCount: formData.participantCount,
         roomResource: selectedRoom as RoomResource,
+        roomLayout: formData.roomLayout,
         equipment: formData.equipment,
         notes: formData.notes,
         status: 'pending',
@@ -395,6 +434,7 @@ Atau login ke dashboard untuk review.`;
                   division: user.division,
                   activityType: '',
                   participantCount: 1,
+                  roomLayout: 'Default',
                   equipment: [],
                   notes: '',
                 });
@@ -771,31 +811,91 @@ Atau login ke dashboard untuk review.`;
                 />
               </div>
 
+              {/* Room Layout - Only for Aula INPRESIV */}
+              {selectedRoom === 'Aula INPRESIV' && (
+                <div>
+                  <label className="form-label">Layout Ruangan</label>
+                  <select
+                    value={formData.roomLayout}
+                    onChange={(e) =>
+                      setFormData({ ...formData, roomLayout: e.target.value as RoomLayout })
+                    }
+                    className="form-select"
+                    required
+                  >
+                    {roomLayouts.map((layout) => (
+                      <option key={layout} value={layout}>
+                        {layout}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Built-in Equipment Info */}
+              {selectedRoom && getBuiltInEquipment(selectedRoom as RoomResource).length > 0 && (
+                <div
+                  className="px-4 py-3 rounded-xl"
+                  style={{ background: 'var(--success-light)' }}
+                >
+                  <div className="text-xs font-bold mb-1" style={{ color: 'var(--success)' }}>
+                    Perlengkapan Built-in (sudah termasuk):
+                  </div>
+                  <div className="text-xs" style={{ color: '#15803d' }}>
+                    {getBuiltInEquipment(selectedRoom as RoomResource).join(', ')}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="form-label">Perlengkapan Kegiatan</label>
                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                  {equipmentOptions.map((equipment) => (
-                    <label
-                      key={equipment}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-xs transition-all"
-                      style={{
-                        background: formData.equipment.includes(equipment)
-                          ? 'var(--primary-light)'
-                          : 'var(--secondary)',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.equipment.includes(equipment)}
-                        onChange={() => handleEquipmentChange(equipment)}
-                        className="w-3.5 h-3.5 rounded"
-                        style={{ accentColor: 'var(--primary)' }}
-                      />
-                      <span className="font-semibold" style={{ color: 'var(--heading)' }}>
-                        {equipment}
-                      </span>
-                    </label>
-                  ))}
+                  {availableEquipment.map((equipment) => {
+                    const builtIn = selectedRoom ? getBuiltInEquipment(selectedRoom as RoomResource) : [];
+                    const isBuiltIn = builtIn.includes(equipment);
+                    const available = selectedSlot
+                      ? getAvailableEquipment(equipment, selectedSlot.date, allBookings)
+                      : 0;
+                    const isOutOfStock = available === 0 && !isBuiltIn;
+
+                    return (
+                      <label
+                        key={equipment}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all"
+                        style={{
+                          background: formData.equipment.includes(equipment)
+                            ? 'var(--primary-light)'
+                            : 'var(--secondary)',
+                          cursor: isBuiltIn || isOutOfStock ? 'not-allowed' : 'pointer',
+                          opacity: isBuiltIn || isOutOfStock ? 0.6 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.equipment.includes(equipment)}
+                          onChange={() => handleEquipmentChange(equipment)}
+                          disabled={isBuiltIn || isOutOfStock}
+                          className="w-3.5 h-3.5 rounded"
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <div className="flex-1">
+                          <div className="font-semibold" style={{ color: 'var(--heading)' }}>
+                            {equipment}
+                          </div>
+                          {!isBuiltIn && (
+                            <div
+                              className="text-[10px]"
+                              style={{
+                                color: isOutOfStock ? 'var(--danger)' : 'var(--text)',
+                              }}
+                            >
+                              {isOutOfStock ? 'Habis' : `Tersedia: ${available}`}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

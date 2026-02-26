@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Division, RoomResource, Equipment, Booking } from '@/lib/types';
+import { Division, RoomResource, Equipment, Booking, RoomLayout, EQUIPMENT_INVENTORY } from '@/lib/types';
 import { timeToMinutes } from '@/lib/timeUtils';
 import { getStaffByJabatan } from '@/lib/staffData';
 import { generateApproveLink } from '@/lib/approveToken';
+import { getAvailableEquipmentForRoom, getBuiltInEquipment, getAvailableEquipment } from '@/lib/equipmentUtils';
 import DashboardLayout from '@/components/DashboardLayout';
 
 export default function NewBookingPage() {
@@ -28,6 +29,7 @@ export default function NewBookingPage() {
     activityType: '',
     participantCount: 1,
     roomResource: '' as RoomResource,
+    roomLayout: 'Default' as RoomLayout,
     equipment: [] as Equipment[],
     notes: '',
   });
@@ -43,6 +45,40 @@ export default function NewBookingPage() {
       division: user.division,
     }));
   }, [user, router]);
+
+  // Fetch all bookings for equipment availability check
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const bookingsRef = collection(db, 'bookings');
+        const q = query(bookingsRef, where('status', 'in', ['pending', 'approved']));
+        const snapshot = await getDocs(q);
+        const bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+        setAllBookings(bookingsData);
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+      }
+    };
+
+    if (formData.bookingDate) {
+      fetchBookings();
+    }
+  }, [formData.bookingDate]);
+
+  // Update available equipment when room changes
+  useEffect(() => {
+    if (formData.roomResource) {
+      const equipment = getAvailableEquipmentForRoom(formData.roomResource);
+      setAvailableEquipment(equipment);
+
+      // Auto-add built-in equipment
+      const builtIn = getBuiltInEquipment(formData.roomResource);
+      setFormData(prev => ({
+        ...prev,
+        equipment: [...builtIn],
+      }));
+    }
+  }, [formData.roomResource]);
 
   const divisions: Division[] = [
     'FPEPK (LIKD)',
@@ -65,16 +101,12 @@ export default function NewBookingPage() {
     'Hanya Alat',
   ];
 
-  const equipmentOptions: Equipment[] = [
-    'Alat ZOOM Logitech',
-    'Monitor CISCO',
-    'Proyektor',
-    'Sound System',
-    'Printer Portable',
-    'LCD Video Wall Ruang Inpresiv',
-    'Hanya Ruangan Tanpa Alat Tambahan',
-    'Mic Confrence Portable',
-  ];
+  // Dynamic equipment list based on selected room
+  const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+
+  // Room layouts (only for Aula INPRESIV)
+  const roomLayouts: RoomLayout[] = ['U-Shape', 'Classroom', 'Lesehan', 'Room Table'];
 
   const checkConflict = async (): Promise<boolean> => {
     const bookingsRef = collection(db, 'bookings');
@@ -393,38 +425,106 @@ Atau login ke dashboard untuk review.`;
             {/* Divider */}
             <hr style={{ borderColor: 'var(--border)' }} />
 
+            {/* Room Layout (only for Aula INPRESIV) */}
+            {formData.roomResource === 'Aula INPRESIV' && (
+              <div>
+                <label className="form-label">Tata Letak Ruangan</label>
+                <select
+                  value={formData.roomLayout}
+                  onChange={(e) => setFormData({ ...formData, roomLayout: e.target.value as RoomLayout })}
+                  className="form-select"
+                  required
+                >
+                  {roomLayouts.map((layout) => (
+                    <option key={layout} value={layout}>{layout}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Divider */}
+            <hr style={{ borderColor: 'var(--border)' }} />
+
             {/* Section: Perlengkapan */}
             <div>
               <h3 className="text-base font-bold mb-4" style={{ color: 'var(--heading)' }}>
                 Perlengkapan Kegiatan
               </h3>
+
+              {/* Built-in Equipment Info */}
+              {formData.roomResource && getBuiltInEquipment(formData.roomResource).length > 0 && (
+                <div className="mb-4 px-4 py-3 rounded-xl" style={{ background: 'var(--success-light)' }}>
+                  <p className="text-sm font-semibold mb-2" style={{ color: '#15803d' }}>
+                    ✓ Sudah termasuk di ruangan ini:
+                  </p>
+                  <p className="text-xs" style={{ color: '#15803d' }}>
+                    {getBuiltInEquipment(formData.roomResource).join(', ')}
+                  </p>
+                </div>
+              )}
+
+              {/* Available Equipment with Stock Counter */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {equipmentOptions.map((equipment) => (
-                  <label
-                    key={equipment}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200"
-                    style={{
-                      background: formData.equipment.includes(equipment)
-                        ? 'var(--primary-light)'
-                        : 'var(--secondary)',
-                      border: formData.equipment.includes(equipment)
-                        ? '1px solid var(--primary)'
-                        : '1px solid transparent',
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.equipment.includes(equipment)}
-                      onChange={() => handleEquipmentChange(equipment)}
-                      className="w-4 h-4 rounded"
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                    <span className="text-sm font-semibold" style={{ color: 'var(--heading)' }}>
-                      {equipment}
-                    </span>
-                  </label>
-                ))}
+                {availableEquipment.map((equipment) => {
+                  const config = EQUIPMENT_INVENTORY.find(e => e.name === equipment);
+                  const available = getAvailableEquipment(equipment, formData.bookingDate, allBookings);
+                  const isBuiltIn = getBuiltInEquipment(formData.roomResource).includes(equipment);
+                  const isDisabled = available <= 0 || isBuiltIn;
+
+                  return (
+                    <label
+                      key={equipment}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                        isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                      style={{
+                        background: formData.equipment.includes(equipment)
+                          ? 'var(--primary-light)'
+                          : 'var(--secondary)',
+                        border: formData.equipment.includes(equipment)
+                          ? '1px solid var(--primary)'
+                          : '1px solid transparent',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.equipment.includes(equipment)}
+                        onChange={() => !isDisabled && handleEquipmentChange(equipment)}
+                        disabled={isDisabled}
+                        className="w-4 h-4 rounded"
+                        style={{ accentColor: 'var(--primary)' }}
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-semibold block" style={{ color: 'var(--heading)' }}>
+                          {equipment}
+                        </span>
+                        {config?.description && (
+                          <span className="text-xs" style={{ color: 'var(--text)' }}>
+                            {config.description}
+                          </span>
+                        )}
+                      </div>
+                      {formData.bookingDate && (
+                        <span
+                          className="text-xs font-bold px-2 py-1 rounded"
+                          style={{
+                            background: available > 0 ? 'var(--success-light)' : 'var(--danger-light)',
+                            color: available > 0 ? '#15803d' : '#991b1b',
+                          }}
+                        >
+                          {available > 0 ? `Tersedia: ${available}` : 'Habis'}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
+
+              {!formData.roomResource && (
+                <p className="text-sm text-center py-8" style={{ color: 'var(--text)' }}>
+                  Pilih ruangan terlebih dahulu untuk melihat perlengkapan yang tersedia
+                </p>
+              )}
             </div>
 
             {/* Divider */}
