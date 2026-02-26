@@ -17,17 +17,52 @@ export type RoomResource =
   | "Akun Zoom"
   | "Hanya Alat";
 
-export type Equipment = 
-  | "Alat ZOOM Logitech"
-  | "Monitor CISCO"
-  | "Proyektor"
-  | "Sound System"
+export type Equipment =
+  | "LCD Proyektor"
+  | "Zoom Dedicated (Profesionalisme)"
+  | "Zoom Mobile"
+  | "Recording"
+  | "Pointer"
   | "Printer Portable"
-  | "LCD Video Wall Ruang Inpresiv"
-  | "Hanya Ruangan Tanpa Alat Tambahan"
-  | "Mic Confrence Portable";
+  | "Mic Ashley Mobile"
+  | "Speaker Portable"
+  | "Screen Proyektor"
+  | "Video Wall (Inpresiv Built-in)"
+  | "Monitor Cisco (Inklusif Built-in)";
+
+export type RoomLayout =
+  | "U-Shape"
+  | "Classroom"
+  | "Lesehan"
+  | "Room Table"
+  | "Default";
 
 export type BookingStatus = "pending" | "approved" | "rejected";
+
+// Equipment configuration with quantity
+export interface EquipmentConfig {
+  name: Equipment;
+  quantity: number;
+  description?: string;
+}
+
+export const EQUIPMENT_INVENTORY: EquipmentConfig[] = [
+  { name: "LCD Proyektor", quantity: 3 },
+  { name: "Zoom Dedicated (Profesionalisme)", quantity: 1, description: "Fixed di R. Profesionalisme" },
+  { name: "Zoom Mobile", quantity: 1, description: "Kondisi agak rusak" },
+  { name: "Recording", quantity: 2 },
+  { name: "Pointer", quantity: 3 },
+  { name: "Printer Portable", quantity: 2 },
+  { name: "Mic Ashley Mobile", quantity: 2, description: "2 set (4 mic, 2 receiver)" },
+  { name: "Speaker Portable", quantity: 2 },
+  { name: "Screen Proyektor", quantity: 2 },
+];
+
+// Room-specific built-in equipment
+export const ROOM_BUILT_IN_EQUIPMENT: Record<string, Equipment[]> = {
+  "Aula INPRESIV": ["Video Wall (Inpresiv Built-in)"],
+  "R. Inklusif": ["Monitor Cisco (Inklusif Built-in)"],
+};
 
 export interface User {
   uid: string;
@@ -49,6 +84,7 @@ export interface Booking {
   activityType: string;
   participantCount: number;
   roomResource: RoomResource;
+  roomLayout?: RoomLayout; // For Aula INPRESIV
   equipment: Equipment[];
   status: BookingStatus;
   createdAt: Date;
