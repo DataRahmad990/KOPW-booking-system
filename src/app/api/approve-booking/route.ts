@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import crypto from 'crypto';
+import { adminDb } from '@/lib/firebase-admin';
 
-// Secret key untuk generate token (PENTING: Simpan di env variable di production!)
 const SECRET_KEY = process.env.APPROVE_TOKEN_SECRET || 'kopw-booking-secret-key-2026';
 
-export function generateApproveToken(bookingId: string): string {
-  // Sync with client-side algorithm di src/lib/approveToken.ts
+function generateApproveToken(bookingId: string): string {
   let hash = 0;
   const str = bookingId + SECRET_KEY;
 
@@ -20,7 +16,7 @@ export function generateApproveToken(bookingId: string): string {
   return Math.abs(hash).toString(16).padStart(32, '0').substring(0, 32);
 }
 
-export function verifyApproveToken(bookingId: string, token: string): boolean {
+function verifyApproveToken(bookingId: string, token: string): boolean {
   const validToken = generateApproveToken(bookingId);
   return validToken === token;
 }
@@ -38,7 +34,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify token
     if (!verifyApproveToken(bookingId, token)) {
       return NextResponse.json(
         { error: 'Invalid token' },
@@ -46,11 +41,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get booking
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const bookingDoc = await getDoc(bookingRef);
+    const bookingRef = adminDb.collection('bookings').doc(bookingId);
+    const bookingDoc = await bookingRef.get();
 
-    if (!bookingDoc.exists()) {
+    if (!bookingDoc.exists) {
       return NextResponse.json(
         { error: 'Booking not found' },
         { status: 404 }
@@ -59,20 +53,17 @@ export async function GET(request: NextRequest) {
 
     const booking = bookingDoc.data();
 
-    // Check if already approved
-    if (booking.status === 'approved') {
+    if (booking?.status === 'approved') {
       return NextResponse.redirect(
         new URL(`/approve-success?status=already&id=${bookingId}`, request.url)
       );
     }
 
-    // Approve booking
-    await updateDoc(bookingRef, {
+    await bookingRef.update({
       status: 'approved',
       approvedAt: new Date(),
     });
 
-    // Redirect to success page
     return NextResponse.redirect(
       new URL(`/approve-success?status=success&id=${bookingId}`, request.url)
     );
